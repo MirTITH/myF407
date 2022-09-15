@@ -13,7 +13,7 @@
 
 // 串口号配置
 static UART_HandleTypeDef *debug_huart = &huart1;
-// #define config_USE_RTOS 1 // 是否使用 RTOS，如果使用，建议打开
+#define config_USE_RTOS 1 // 是否使用 RTOS，如果使用，建议打开
 
 #if (config_USE_RTOS == 1)
 #include "cmsis_os.h"
