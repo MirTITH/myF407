@@ -44,7 +44,7 @@
         "bin": "",
         "targetName": "stm32f407vetx",
         "baseAddr": "0x08000000",
-        "speed": "50M",
+        "speed": "8M",
         "config": ".eide/debug.pyocd.yaml"
       },
       "uploadConfigMap": {
@@ -58,6 +58,19 @@
           "proType": 1,
           "speed": 8000,
           "otherCmds": ""
+        },
+        "pyOCD": {
+          "bin": "",
+          "targetName": "stm32f407vetx",
+          "baseAddr": "0x08000000",
+          "speed": "5M",
+          "config": ".eide/debug.pyocd.yaml"
+        },
+        "OpenOCD": {
+          "bin": "",
+          "target": "stm32f4x",
+          "interface": "cmsis-dap",
+          "baseAddr": "0x08000000"
         }
       },
       "custom_dep": {

@@ -2,7 +2,7 @@
  * @file uart_printf.c
  * @author X. Y.
  * @brief printf() 串口重定向
- * @version 3.0
+ * @version 3.1
  * @date 2022-9-11
  *
  * @copyright Copyright (c) 2022
@@ -32,24 +32,21 @@ static UART_HandleTypeDef *debug_huart = &huart1;
  */
 __attribute__((used)) int _write(int fd, char *pBuffer, int size)
 {
-    HAL_StatusTypeDef status = HAL_ERROR;
-
-    switch (fd)
-    {
-    case STDOUT_FILENO: // 标准输出流
-        status = HAL_UART_Transmit(debug_huart, (uint8_t *)pBuffer, size, HAL_MAX_DELAY);
-        break;
-    case STDERR_FILENO: // 标准错误流
-        status = HAL_UART_Transmit(debug_huart, (uint8_t *)pBuffer, size, HAL_MAX_DELAY);
-        break;
-    default:
-        // // EBADF, which means the file descriptor is invalid or the file isn't opened for writing;
-        // errno = EBADF;
-        // return -1;
-        break;
+    switch (fd) {
+        case STDOUT_FILENO: // 标准输出流
+            while (HAL_UART_Transmit(debug_huart, (uint8_t *)pBuffer, size, HAL_MAX_DELAY) == HAL_BUSY)
+                ;
+            break;
+        case STDERR_FILENO: // 标准错误流
+            while (HAL_UART_Transmit(debug_huart, (uint8_t *)pBuffer, size, HAL_MAX_DELAY) == HAL_BUSY)
+                ;
+            break;
+        default:
+            // EBADF, which means the file descriptor is invalid or the file isn't opened for writing;
+            errno = EBADF;
+            return -1;
+            break;
     }
-
-    // return (status == HAL_OK ? size : 0);
     return size;
 }
 
@@ -72,8 +69,9 @@ __attribute__((used)) int _write(int fd, char *pBuffer, int size)
  */
 int fputc(int ch, FILE *stream)
 {
-    HAL_StatusTypeDef status = HAL_UART_Transmit(debug_huart, (uint8_t *)&ch, 1, HAL_MAX_DELAY);
-    return (status == HAL_OK ? ch : EOF);
+    while (HAL_UART_Transmit(debug_huart, (uint8_t *)&ch, 1, HAL_MAX_DELAY) == HAL_BUSY)
+        ;
+    return ch;
 }
 
 // ARMCC 默认启用半主机模式，重定向 printf 后需要关闭，防止卡死
@@ -90,7 +88,7 @@ __asm(".global __use_no_semihosting");
 
 // 关闭半主机模式后，需要自己实现一些相关系统函数
 
-const char __stdin_name[] = ":tt";
+const char __stdin_name[]  = ":tt";
 const char __stdout_name[] = ":tt";
 const char __stderr_name[] = ":tt";
 
