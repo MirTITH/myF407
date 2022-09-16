@@ -66,6 +66,7 @@
 // =======================================  Configuration  ========================================
 // ================================================================================================
 
+static int minimumEverFreeheapBytes = 0;
 
 #include <stdlib.h> // maps to newlib...
 #include <malloc.h> // mallinfo...
@@ -164,7 +165,7 @@ void * _sbrk_r(struct _reent *pReent, int incr) {
     static char *currentHeapEnd = &__HeapBase;
     #ifdef STM_VERSION // Use STM CubeMX LD symbols for heap
       if(TotalHeapSize==0) {
-        TotalHeapSize = heapBytesRemaining = (int)((&__HeapLimit)-(&__HeapBase))-ISR_STACK_LENGTH_BYTES;
+        TotalHeapSize = minimumEverFreeheapBytes = heapBytesRemaining = (int)((&__HeapLimit)-(&__HeapBase))-ISR_STACK_LENGTH_BYTES;
       };
     #endif
     char* limit = (xTaskGetSchedulerState()==taskSCHEDULER_NOT_STARTED) ?
@@ -194,6 +195,10 @@ void * _sbrk_r(struct _reent *pReent, int incr) {
     char *previousHeapEnd = currentHeapEnd;
     currentHeapEnd += incr;
     heapBytesRemaining -= incr;
+    if (minimumEverFreeheapBytes > heapBytesRemaining)
+    {
+      minimumEverFreeheapBytes = heapBytesRemaining;
+    }
     #ifndef NDEBUG
         totalBytesProvidedBySBRK += incr;
     #endif
@@ -283,6 +288,10 @@ size_t xPortGetFreeHeapSize( void ) PRIVILEGED_FUNCTION {
 
 // GetMinimumEverFree is not available in newlib's malloc implementation.
 // So, no implementation is provided: size_t xPortGetMinimumEverFreeHeapSize( void ) PRIVILEGED_FUNCTION;
+
+size_t xPortGetMinimumEverFreeHeapSize( void ) PRIVILEGED_FUNCTION {
+  return minimumEverFreeheapBytes;
+}
 
 //! No implementation needed, but stub provided in case application already calls vPortInitialiseBlocks
 void vPortInitialiseBlocks( void ) PRIVILEGED_FUNCTION {};

@@ -1,12 +1,12 @@
 /**
  * @file stdio_CLI.c
- * @author X. Y.  
+ * @author X. Y.
  * @brief FreeRTOS 命令行，使用标准输入输出流
  * @version 0.1
  * @date 2022-09-16
- * 
+ *
  * @copyright Copyright (c) 2022
- * 
+ *
  */
 
 #include "stdio_CLI.h"
@@ -14,6 +14,8 @@
 #include "FreeRTOS_CLI.h"
 #include <stdio.h>
 #include <string.h>
+
+extern void vRegisterSampleCLICommands(void);
 
 // 输入缓冲
 static char inputBuffer[configCOMMAND_INT_MAX_INPUT_SIZE] = {0};
@@ -49,7 +51,7 @@ static void CLI_ThreadEntry(void const *argument)
     (void)argument;
     char *outputBuffer = FreeRTOS_CLIGetOutputBuffer();
     BaseType_t xReturned;
-
+    vRegisterSampleCLICommands();
     CLI_PutStr(helloStr);
 
     for (;;) {
