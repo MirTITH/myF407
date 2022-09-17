@@ -17,7 +17,7 @@ void StartDefaultTask(void const *argument)
 
     LCD_Init();
 
-    LCD_fillScreen(ST7735_BLUE);
+    LCD_fillScreen(ST7735_GREEN);
 
     for (;;) {
         HAL_GPIO_TogglePin(GPIOA, GPIO_PIN_7);
