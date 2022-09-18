@@ -20,7 +20,7 @@
     "linker": {
         "output-format": "elf",
         "LD_FLAGS": "--specs=nosys.specs --specs=nano.specs",
-        "LIB_FLAGS": "-lm -lstdc++ -u _printf_float",
+        "LIB_FLAGS": "-lm -u _printf_float",
         "remove-unused-input-sections": true
     }
 }

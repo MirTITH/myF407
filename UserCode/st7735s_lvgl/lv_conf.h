@@ -78,7 +78,7 @@
  *====================*/
 
 /*Default display refresh period. LVG will redraw changed areas with this period time*/
-#define LV_DISP_DEF_REFR_PERIOD 30      /*[ms]*/
+#define LV_DISP_DEF_REFR_PERIOD 15     /*[ms]*/
 
 /*Input device read period in milliseconds*/
 #define LV_INDEV_DEF_READ_PERIOD 30     /*[ms]*/
@@ -219,7 +219,7 @@
  *-----------*/
 
 /*Enable the log module*/
-#define LV_USE_LOG 1
+#define LV_USE_LOG 0
 #if LV_USE_LOG
 
     /*How important log should be added:
@@ -351,10 +351,10 @@
 /*Montserrat fonts with ASCII range and some symbols using bpp = 4
  *https://fonts.google.com/specimen/Montserrat*/
 #define LV_FONT_MONTSERRAT_8  0
-#define LV_FONT_MONTSERRAT_10 1
-#define LV_FONT_MONTSERRAT_12 0
+#define LV_FONT_MONTSERRAT_10 0
+#define LV_FONT_MONTSERRAT_12 1
 #define LV_FONT_MONTSERRAT_14 0
-#define LV_FONT_MONTSERRAT_16 0
+#define LV_FONT_MONTSERRAT_16 1
 #define LV_FONT_MONTSERRAT_18 0
 #define LV_FONT_MONTSERRAT_20 0
 #define LV_FONT_MONTSERRAT_22 0
@@ -388,7 +388,7 @@
 #define LV_FONT_CUSTOM_DECLARE
 
 /*Always set a default font*/
-#define LV_FONT_DEFAULT &lv_font_montserrat_10
+#define LV_FONT_DEFAULT &lv_font_montserrat_12
 
 /*Enable handling large font and/or fonts with a lot of characters.
  *The limit depends on the font size, font face and bpp.
@@ -724,7 +724,7 @@
  ====================*/
 
 /*Show some widget. It might be required to increase `LV_MEM_SIZE` */
-#define LV_USE_DEMO_WIDGETS 0
+#define LV_USE_DEMO_WIDGETS 1
 #if LV_USE_DEMO_WIDGETS
 #define LV_DEMO_WIDGETS_SLIDESHOW 0
 #endif
@@ -740,7 +740,7 @@
 #endif
 
 /*Stress test for LVGL*/
-#define LV_USE_DEMO_STRESS 0
+#define LV_USE_DEMO_STRESS 1
 
 /*Music player demo*/
 #define LV_USE_DEMO_MUSIC 0
