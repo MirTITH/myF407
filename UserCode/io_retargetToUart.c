@@ -1,16 +1,17 @@
 /**
  * @file io_retargetToUart.c
  * @author X. Y.
- * @brief io 重定向，支持输入和输出
- * @version 3.3
- * @date 2022-9-16
+ * @brief io 重定向，支持输入和输出（注意不能在中断中使用）
+ * @version 3.4
+ * @date 2022-9-18
  *
  * @copyright Copyright (c) 2022
  *
  */
 
 #include "usart.h"
-// #include "cmsis_os.h"
+
+#define config_USE_RTOS // 是否使用 RTOS
 
 // 串口号配置
 // 注：仅 GCC 编译器支持 stderr 和 stdout 指定不同串口，ARMCC 编译器的 stderr 和 stdout 都使用 stdout_huart 输出。
@@ -18,15 +19,32 @@ static UART_HandleTypeDef *stdout_huart = &huart1;
 static UART_HandleTypeDef *stderr_huart = &huart1;
 static UART_HandleTypeDef *stdin_huart  = &huart1;
 
+#ifdef config_USE_RTOS
+#include "cmsis_os.h"
+#endif
+
+static void UART_WriteStr(UART_HandleTypeDef *huart, const uint8_t *str, uint16_t size)
+{
+    while (HAL_UART_Transmit(huart, str, size, HAL_MAX_DELAY) == HAL_BUSY) {
+#ifdef config_USE_RTOS
+        osThreadYield();
+#endif
+    }
+}
+
 /**
  * @brief 从串口外设读取 1 个字符
  *
  * @param huart
  * @return char
  */
-char UART_ReadChar(UART_HandleTypeDef *huart)
+static char UART_ReadChar(UART_HandleTypeDef *huart)
 {
-    while (!__HAL_UART_GET_FLAG(huart, UART_FLAG_RXNE));
+    while (!__HAL_UART_GET_FLAG(huart, UART_FLAG_RXNE)) {
+#ifdef config_USE_RTOS
+        osThreadYield();
+#endif
+    }
     return (huart->Instance->DR & (uint8_t)0x00FF);
 }
 
@@ -50,10 +68,10 @@ __attribute__((used)) int _write(int fd, char *pBuffer, int size)
 {
     switch (fd) {
         case STDOUT_FILENO: // 标准输出流
-            while (HAL_UART_Transmit(stdout_huart, (uint8_t *)pBuffer, size, HAL_MAX_DELAY) == HAL_BUSY);
+            UART_WriteStr(stdout_huart, (uint8_t *)pBuffer, size);
             break;
         case STDERR_FILENO: // 标准错误流
-            while (HAL_UART_Transmit(stderr_huart, (uint8_t *)pBuffer, size, HAL_MAX_DELAY) == HAL_BUSY);
+            UART_WriteStr(stderr_huart, (uint8_t *)pBuffer, size);
             break;
         default:
             // EBADF, which means the file descriptor is invalid or the file isn't opened for writing;
@@ -110,8 +128,7 @@ __attribute__((used)) int _read(int fd, char *pBuffer, int size)
  */
 int fputc(int ch, FILE *stream)
 {
-    while (HAL_UART_Transmit(stdout_huart, (uint8_t *)&ch, 1, HAL_MAX_DELAY) == HAL_BUSY)
-        ;
+    UART_WriteStr(stdout_huart, (uint8_t *)&ch, 1);
     return ch;
 }
 

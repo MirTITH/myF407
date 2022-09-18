@@ -1,7 +1,7 @@
 #include "user_main.h"
 #include "main.h"
 #include "cmsis_os.h"
-// #include "stdio_CLI.h"
+#include "stdio_CLI.h"
 #include "lvgl_task.h"
 #include "lv_demos.h"
 #include "lvgl_ui.h"
@@ -10,7 +10,7 @@ void StartDefaultTask(void const *argument)
 {
     (void)argument;
 
-    // CLI_Start();
+    CLI_Start();
 
     lv_task_create();
     lv_mutex_lock();
