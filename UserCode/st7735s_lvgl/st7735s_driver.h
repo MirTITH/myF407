@@ -1,9 +1,34 @@
 #ifndef __ST7735_DRIVER_H__
 #define __ST7735_DRIVER_H__
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include "spi.h"
 #include "gpio.h"
 
+#define DISPLAY_H 128
+#define DISPLAY_W 160
+
+#define ST7735_RES_GPIO_Port GPIOC
+#define ST7735_RES_Pin GPIO_PIN_5
+
+#define ST7735_DC_GPIO_Port GPIOB
+#define ST7735_DC_Pin GPIO_PIN_1
+
+#define ST7735_CS_GPIO_Port GPIOE
+#define ST7735_CS_Pin GPIO_PIN_8
+
+//宏定义基本引脚功能
+#define LCD_RESET_ENABLE() HAL_GPIO_WritePin(ST7735_RES_GPIO_Port, ST7735_RES_Pin, GPIO_PIN_RESET )
+#define LCD_RESET_DISABLE() HAL_GPIO_WritePin(ST7735_RES_GPIO_Port, ST7735_RES_Pin, GPIO_PIN_SET )
+
+#define LCD_DC_DATA() HAL_GPIO_WritePin(ST7735_DC_GPIO_Port, ST7735_DC_Pin, GPIO_PIN_SET )
+#define LCD_DC_COMMMAND() HAL_GPIO_WritePin(ST7735_DC_GPIO_Port, ST7735_DC_Pin, GPIO_PIN_RESET )
+
+#define LCD_CS_ENABLE()  HAL_GPIO_WritePin(ST7735_CS_GPIO_Port, ST7735_CS_Pin, GPIO_PIN_RESET )
+#define LCD_CS_DISABLE() HAL_GPIO_WritePin(ST7735_CS_GPIO_Port, ST7735_CS_Pin, GPIO_PIN_SET )
 
 //各种参数的宏定义
 #define ST7735_MADCTL_MY  0x80
@@ -92,4 +117,9 @@ void drawNumber_5(int num, int xStart, int yStart);
 void drawNumber_6(int num, int xStart, int yStart);
 void drawNumber(int num, int xStart, int yStart);
 void lcd_init();
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif //__ST7735_DRIVER_H__

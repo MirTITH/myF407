@@ -10,7 +10,7 @@
  */
 
 #include "usart.h"
-#include "cmsis_os.h"
+// #include "cmsis_os.h"
 
 // 串口号配置
 // 注：仅 GCC 编译器支持 stderr 和 stdout 指定不同串口，ARMCC 编译器的 stderr 和 stdout 都使用 stdout_huart 输出。
@@ -26,9 +26,7 @@ static UART_HandleTypeDef *stdin_huart  = &huart1;
  */
 inline char UART_ReadChar(UART_HandleTypeDef *huart)
 {
-    while (!__HAL_UART_GET_FLAG(huart, UART_FLAG_RXNE)) {
-        osThreadYield();
-    }
+    while (!__HAL_UART_GET_FLAG(huart, UART_FLAG_RXNE));
     return (huart->Instance->DR & (uint8_t)0x00FF);
 }
 
@@ -52,14 +50,10 @@ __attribute__((used)) int _write(int fd, char *pBuffer, int size)
 {
     switch (fd) {
         case STDOUT_FILENO: // 标准输出流
-            while (HAL_UART_Transmit(stdout_huart, (uint8_t *)pBuffer, size, HAL_MAX_DELAY) == HAL_BUSY) {
-                osThreadYield();
-            }
+            while (HAL_UART_Transmit(stdout_huart, (uint8_t *)pBuffer, size, HAL_MAX_DELAY) == HAL_BUSY);
             break;
         case STDERR_FILENO: // 标准错误流
-            while (HAL_UART_Transmit(stderr_huart, (uint8_t *)pBuffer, size, HAL_MAX_DELAY) == HAL_BUSY) {
-                osThreadYield();
-            }
+            while (HAL_UART_Transmit(stderr_huart, (uint8_t *)pBuffer, size, HAL_MAX_DELAY) == HAL_BUSY);
             break;
         default:
             // EBADF, which means the file descriptor is invalid or the file isn't opened for writing;

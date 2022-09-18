@@ -1,31 +1,8 @@
-#include "st7735_driver.h"
+#include "st7735s_driver.h"
 #include "main.h"
 #include "gpio.h"
 #include "spi.h"
 #include "LetterGraph.h"
-
-#define ST7735_RES_GPIO_Port GPIOC
-#define ST7735_RES_Pin GPIO_PIN_5
-
-#define ST7735_DC_GPIO_Port GPIOB
-#define ST7735_DC_Pin GPIO_PIN_1
-
-#define ST7735_CS_GPIO_Port GPIOE
-#define ST7735_CS_Pin GPIO_PIN_8
-
-//宏定义屏幕大小
-#define LCD_W 128
-#define LCD_H 160
-
-//宏定义基本引脚功能
-#define LCD_RESET_ENABLE() HAL_GPIO_WritePin(ST7735_RES_GPIO_Port, ST7735_RES_Pin, GPIO_PIN_RESET )
-#define LCD_RESET_DISABLE() HAL_GPIO_WritePin(ST7735_RES_GPIO_Port, ST7735_RES_Pin, GPIO_PIN_SET )
-
-#define LCD_DC_DATA() HAL_GPIO_WritePin(ST7735_DC_GPIO_Port, ST7735_DC_Pin, GPIO_PIN_SET )
-#define LCD_DC_COMMMAND() HAL_GPIO_WritePin(ST7735_DC_GPIO_Port, ST7735_DC_Pin, GPIO_PIN_RESET )
-
-#define LCD_CS_ENABLE()  HAL_GPIO_WritePin(ST7735_CS_GPIO_Port, ST7735_CS_Pin, GPIO_PIN_RESET )
-#define LCD_CS_DISABLE() HAL_GPIO_WritePin(ST7735_CS_GPIO_Port, ST7735_CS_Pin, GPIO_PIN_SET )
 
 //我感觉下面这个用不到，所以注释掉了
 /*typedef struct 
@@ -182,30 +159,27 @@ void LCD_Init(){
 
 }
 
-uint8_t screenBuf[LCD_W][LCD_H][2];
-
-
 //填充整个屏幕为某个颜色
 void LCD_fillScreen(uint16_t color)
 {
-    LCD_Zone_Set(0, 0, LCD_W - 1, LCD_H - 1);
-    // uint8_t temBuf[2];
-    // temBuf[0] = color >> 8;
-    // temBuf[1] = color & 0xff;
+    // LCD_Zone_Set(0, 0, LCD_W - 1, LCD_H - 1);
+    // // uint8_t temBuf[2];
+    // // temBuf[0] = color >> 8;
+    // // temBuf[1] = color & 0xff;
 
-    LCD_DC_DATA();
-    LCD_CS_ENABLE();
+    // LCD_DC_DATA();
+    // LCD_CS_ENABLE();
     
-    for (uint8_t i = 0; i < LCD_W; i++) {
-        for (uint8_t j = 0; j < LCD_H; j++) {
-            screenBuf[i][j][0] = color >> 8;
-            screenBuf[i][j][1] = color & 0xff;
-        }
-    }
-    HAL_SPI_Transmit_DMA(&hspi2, (uint8_t *)screenBuf, sizeof(screenBuf));
-    while(hspi2.State != HAL_SPI_STATE_READY);
+    // for (uint8_t i = 0; i < LCD_W; i++) {
+    //     for (uint8_t j = 0; j < LCD_H; j++) {
+    //         screenBuf[i][j][0] = color >> 8;
+    //         screenBuf[i][j][1] = color & 0xff;
+    //     }
+    // }
+    // HAL_SPI_Transmit_DMA(&hspi2, (uint8_t *)screenBuf, sizeof(screenBuf));
+    // while(hspi2.State != HAL_SPI_STATE_READY);
 
-    LCD_CS_DISABLE();
+    // LCD_CS_DISABLE();
 }
 
 //获取为屏幕填充任意颜色的16位（5-6-5）二进制数值
