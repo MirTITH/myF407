@@ -37,7 +37,14 @@ void IORetarget_Uart_RxCpltCallback(UART_HandleTypeDef *huart)
     if (huart == stdin_huart) {
         stdinBufferQueue.end++;
         if (stdinBufferQueue.end >= stdinBufferQueue.total_size) stdinBufferQueue.end = 0;
-        HAL_UART_Receive_IT(stdin_huart, (uint8_t *)&stdinBufferQueue.buffer[stdinBufferQueue.end], 1);
+        while (HAL_UART_Receive_IT(stdin_huart, (uint8_t *)&stdinBufferQueue.buffer[stdinBufferQueue.end], 1) == HAL_BUSY)
+        {
+            // 接收大量数据时，有概率发生 Overrun 错误，串口一直处于忙状态
+            // 以下代码可以清除该状态
+            __HAL_UART_CLEAR_OREFLAG(huart);
+            huart->RxState = HAL_UART_STATE_READY;
+            __HAL_UNLOCK(huart);
+        }
     }
 }
 
