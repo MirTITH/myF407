@@ -56,8 +56,8 @@
           "bin": "",
           "baseAddr": "",
           "cpuInfo": {
-            "vendor": "null",
-            "cpuName": "null"
+            "vendor": "ST",
+            "cpuName": "STM32F407VE"
           },
           "proType": 1,
           "speed": 8000,
@@ -67,7 +67,7 @@
           "bin": "",
           "targetName": "stm32f407vetx",
           "baseAddr": "0x08000000",
-          "speed": "50M",
+          "speed": "8M",
           "config": ".eide/debug.pyocd.yaml"
         },
         "OpenOCD": {

@@ -1,11 +1,9 @@
 #include "user_main.hpp"
 #include "main.h"
 #include "cmsis_os.h"
-// #include "stdio.h"
 // #include "stdio_CLI.h"
 #include "lvgl.h"
-#include "st7735s_lvgl.h"
-#include "st7735s_driver.h"
+#include "lv_port_disp_st7735s.h"
 #include "lv_demos.h"
 
 using namespace std;
@@ -13,15 +11,15 @@ using namespace std;
 void lvglTask(void const *argument)
 {
     (void)argument;
-    LCD_Init();
     lv_init();
-    st7735_lvgl_init();
-    lv_demo_stress();
+    lv_port_disp_init();
+    // lv_demo_stress();
+    lv_demo_benchmark();
 
-
+    uint32_t PreviousWakeTime = osKernelSysTick();
     for (;;) {
         lv_timer_handler();
-        osDelay(5);
+        osDelayUntil(&PreviousWakeTime, 5);
     }
 }
 

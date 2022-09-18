@@ -1,378 +1,254 @@
+/**
+ * @file st7735s_driver.c
+ * @author X. Y.
+ * @brief
+ * @version 0.1
+ * @date 2022-09-18
+ *
+ * @copyright Copyright (c) 2022
+ *
+ */
+
 #include "st7735s_driver.h"
-#include "main.h"
-#include "gpio.h"
-#include "spi.h"
-#include "LetterGraph.h"
+#include "cmsis_os.h"
 
-//我感觉下面这个用不到，所以注释掉了
-/*typedef struct 
+// LCD define
+
+// LCD Screen 1
+LCD_t lcd1 = {
+    .hspi          = &hspi2,
+    .height        = 160,
+    .width         = 128,
+    .csGPIOPort    = GPIOE,
+    .csGPIOPin     = GPIO_PIN_8,
+    .dcGPIOPort    = GPIOB,
+    .dcGPIOPin     = GPIO_PIN_1,
+    .resetGPIOPort = GPIOC,
+    .resetGPIOPin  = GPIO_PIN_5};
+
+static inline void _SetCS(LCD_t *lcd, bool isEnable)
 {
-    SPI_HandleTypeDef *hspi;
-}LCD_t;
-
-LCD_t LCDParam;*/
-
-//向SPI接口写东西
-void LCD_Write_Bus(uint8_t data){
-    
-    if(HAL_SPI_Transmit(&hspi2,&data,1,0xffff) != HAL_OK){
-        Error_Handler();
-    }
+    HAL_GPIO_WritePin(lcd->csGPIOPort, lcd->csGPIOPin, !isEnable);
 }
 
-//向SPI接口写命令
-void LCD_Write_COMMAND(uint8_t address){
-    LCD_DC_COMMMAND();
-    
-    LCD_CS_ENABLE();
-    LCD_Write_Bus(address);
-    LCD_CS_DISABLE();
+static inline void _SwitchToData(LCD_t *lcd, bool isData)
+{
+    HAL_GPIO_WritePin(lcd->dcGPIOPort, lcd->dcGPIOPin, isData);
 }
 
-//向SPI接口写8位数据
-void LCD_Write_Data8(uint8_t data){
-    LCD_DC_DATA();
-    
-    LCD_CS_ENABLE();
-    LCD_Write_Bus(data);
-    LCD_CS_DISABLE();
+static inline void _SetResetPin(LCD_t *lcd, bool isResetEnable)
+{
+    HAL_GPIO_WritePin(lcd->resetGPIOPort, lcd->resetGPIOPin, !isResetEnable);
 }
 
-//向SPI接口写16位数据
-void LCD_Write_Data16(uint16_t data){
-
-    uint8_t temBuf[2];
-    temBuf[0] = data >> 8;
-    temBuf[1] = data & 0xff;
-
-    LCD_DC_DATA();
-    
-    LCD_CS_ENABLE();
-    if(HAL_SPI_Transmit(&hspi2,(uint8_t*)temBuf,2,0xffff) != HAL_OK ){
-        Error_Handler();
-    }
-
-    LCD_CS_DISABLE();
+static inline void _Delay(uint32_t millisec)
+{
+    osDelay(millisec);
 }
 
-//设定数据书写的范围
-void LCD_Zone_Set(uint8_t xStart, uint8_t yStart, uint8_t xEnd, uint8_t yEnd){
-    LCD_Write_COMMAND(ST7735_CASET);        // Column Address set
-    LCD_Write_Data8(xStart>>8);
-    LCD_Write_Data8(xStart);
-    LCD_Write_Data8(xEnd>>8);
-    LCD_Write_Data8(xEnd);
-
-    LCD_Write_COMMAND(ST7735_RASET);        // Row Address Set 
-    LCD_Write_Data8(yStart>>8);
-    LCD_Write_Data8(yStart);
-    LCD_Write_Data8(yEnd>>8);
-    LCD_Write_Data8(yEnd);
-
-    LCD_Write_COMMAND(ST7735_RAMWR);        // Write Data command
+static inline void _WriteData(LCD_t *lcd, uint8_t data)
+{
+    _SwitchToData(lcd, true);
+    while (HAL_SPI_Transmit(lcd->hspi, &data, 1, HAL_MAX_DELAY) == HAL_BUSY)
+        ;
 }
 
-//初始化LCD
-void LCD_Init(){
-    
-    LCD_RESET_DISABLE();
-    HAL_Delay(5);
-    LCD_RESET_ENABLE();
-    HAL_Delay(5);
-    LCD_RESET_DISABLE();
-    HAL_Delay(20);
-    
-    LCD_Write_COMMAND(ST7735_SWRESET); //Software Reset
-    HAL_Delay(20);
+static inline void _WriteDataBuffer(LCD_t *lcd, uint8_t *buffer, uint16_t size)
+{
+    _SwitchToData(lcd, true);
+    while (HAL_SPI_Transmit_DMA(lcd->hspi, buffer, size) == HAL_BUSY)
+        ;
+}
 
-    LCD_Write_COMMAND(ST7735_SLPOUT); //Sleep out
-    HAL_Delay(50);
+/**
+ * @brief Write command to LCD
+ *
+ * @param command
+ */
+static inline void _WriteCMD(LCD_t *lcd, uint8_t cmd)
+{
+    _SwitchToData(lcd, false);
+    while (HAL_SPI_Transmit(lcd->hspi, &cmd, 1, HAL_MAX_DELAY) == HAL_BUSY)
+        ;
+}
 
+//各种参数的宏定义
+#define ST7735_MADCTL_MY  0x80
+#define ST7735_MADCTL_MX  0x40
+#define ST7735_MADCTL_MV  0x20
+#define ST7735_MADCTL_ML  0x10
+#define ST7735_MADCTL_RGB 0x00
+#define ST7735_MADCTL_BGR 0x08
+#define ST7735_MADCTL_MH  0x04
+
+//参数命令宏定义
+#define ST7735_NOP     0x00 //没有操作
+#define ST7735_SWRESET 0x01 //软件重置
+#define ST7735_RDDID   0x04 //读取身份信息
+#define ST7735_RDDST   0x09 //读取状态
+
+#define ST7735_SLPIN   0x10 //睡眠模式
+#define ST7735_SLPOUT  0x11 //唤醒模式
+#define ST7735_PTLON   0x12 //部分模式
+#define ST7735_NORON   0x13 //正常模式
+
+#define ST7735_INVOFF  0x20 //从反演模式恢复（见datasheet p94）
+#define ST7735_INVON   0x21 //进入反演模式（见datasheet p94）
+#define ST7735_DISPOFF 0x28 //关闭显示
+#define ST7735_DISPON  0x29 //从关闭显示模式恢复
+#define ST7735_CASET   0x2A //设定列地址
+#define ST7735_RASET   0x2B //设定行地址
+#define ST7735_RAMWR   0x2C //写memory
+#define ST7735_RAMRD   0x2E //读memory
+
+#define ST7735_PTLAR   0x30 //定义部分显示部分
+#define ST7735_COLMOD  0x3A //确定颜色数据格式
+#define ST7735_MADCTL  0x36 //读写内存扫描方向
+
+#define ST7735_FRMCTR1 0xB1 //设定设备帧率
+#define ST7735_FRMCTR2 0xB2 //设定MCU帧率
+#define ST7735_FRMCTR3 0xB3 // Set the frame frequency of the Partial mode/ full colors.
+#define ST7735_INVCTR  0xB4 // Display Inversion mode control
+#define ST7735_DISSET5 0xB6 //设备显示设置
+
+#define ST7735_PWCTR1  0xC0 // Set the GVDD voltage
+#define ST7735_PWCTR2  0xC1 // Set the VGH and VGL supply power level
+#define ST7735_PWCTR3  0xC2 //设定运算放大器中的电流量
+#define ST7735_PWCTR4  0xC3 //设定运算放大器中的电流量
+#define ST7735_PWCTR5  0xC4 //设定运算放大器中的电流量
+#define ST7735_VMCTR1  0xC5 // Set VCOMH Voltage
+
+#define ST7735_RDID1   0xDA // returns 8-bit LCD module’s manufacturer ID
+#define ST7735_RDID2   0xDB // returns 8-bit LCD module/driver version ID
+#define ST7735_RDID3   0xDC // returns 8-bit LCD module/driver ID
+#define ST7735_RDID4   0xDD
+
+#define ST7735_PWCTR6  0xFC //设定运算放大器中的电流量
+#define ST7735_GMCTRP1 0xE0 //设定运算放大器中的电流量
+#define ST7735_GMCTRN1 0xE1 //设定运算放大器中的电流量
+
+static inline void _SetZone(LCD_t *lcd, uint16_t startX, uint16_t startY, uint16_t endX, uint16_t endY)
+{
+    _WriteCMD(lcd, ST7735_CASET);
+
+    _WriteData(lcd, startX >> 8);
+    _WriteData(lcd, startX);
+    _WriteData(lcd, endX >> 8);
+    _WriteData(lcd, endX);
+
+    _WriteCMD(lcd, ST7735_RASET);
+
+    _WriteData(lcd, startY >> 8);
+    _WriteData(lcd, startY);
+    _WriteData(lcd, endY >> 8);
+    _WriteData(lcd, endY);
+}
+
+void LCD_Reset(LCD_t *lcd)
+{
+    _SetCS(lcd, true);
+
+    _SetResetPin(lcd, false);
+    _Delay(5);
+    _SetResetPin(lcd, true);
+    _Delay(5);
+    _SetResetPin(lcd, false);
+    _Delay(20);
+    _WriteCMD(lcd, ST7735_SWRESET); // Software Reset
+    _Delay(20);
+    _WriteCMD(lcd, ST7735_SLPOUT); // Sleep out
+
+    _SetCS(lcd, false);
+    _Delay(50);
+}
+
+void LCD_Init(LCD_t *lcd)
+{
+    LCD_Reset(lcd);
     //--------------------------------------ST7735S Frame Rate----------------------------------------------//
-    LCD_Write_COMMAND(ST7735_FRMCTR1); //Frame rate 80Hz Frame rate=333k/((RTNA + 20) x (LINE + FPA + BPA))
-    LCD_Write_Data8(0x02);  //RTNA
-    LCD_Write_Data8(0x35);  //FPA
-    LCD_Write_Data8(0x36);  //BPA
-    LCD_Write_COMMAND(ST7735_FRMCTR2); //Frame rate 80Hz
-    LCD_Write_Data8(0x02);
-    LCD_Write_Data8(0x35);
-    LCD_Write_Data8(0x36);
-    LCD_Write_COMMAND(ST7735_FRMCTR3); //Frame rate 80Hz
-    LCD_Write_Data8(0x02);
-    LCD_Write_Data8(0x35);
-    LCD_Write_Data8(0x36);
-    LCD_Write_Data8(0x02);
-    LCD_Write_Data8(0x35);
-    LCD_Write_Data8(0x36);
+    _SetCS(lcd, true);
+
+    _WriteCMD(lcd, ST7735_FRMCTR1); // Frame rate 80Hz Frame rate=333k/((RTNA + 20) x (LINE + FPA + BPA))
+    _WriteData(lcd, 0x02);          // RTNA
+    _WriteData(lcd, 0x35);          // FPA
+    _WriteData(lcd, 0x36);          // BPA
+    _WriteCMD(lcd, ST7735_FRMCTR2); // Frame rate 80Hz
+    _WriteData(lcd, 0x02);
+    _WriteData(lcd, 0x35);
+    _WriteData(lcd, 0x36);
+    _WriteCMD(lcd, ST7735_FRMCTR3); // Frame rate 80Hz
+    _WriteData(lcd, 0x02);
+    _WriteData(lcd, 0x35);
+    _WriteData(lcd, 0x36);
+    _WriteData(lcd, 0x02);
+    _WriteData(lcd, 0x35);
+    _WriteData(lcd, 0x36);
 
     //------------------------------------Display Inversion Control-----------------------------------------//
-    LCD_Write_COMMAND(ST7735_INVCTR);  
-    LCD_Write_Data8(0x03);
+    _WriteCMD(lcd, ST7735_INVCTR);
+    _WriteData(lcd, 0x03);
 
     //---------------------------------End ST7735S Power Sequence---------------------------------------//
-    LCD_Write_COMMAND(ST7735_VMCTR1); //VCOM
-    LCD_Write_Data8(0x0a);
-    LCD_Write_COMMAND(ST7735_MADCTL); //MX, MY, RGB mode
-    LCD_Write_Data8(0xC0);
+    _WriteCMD(lcd, ST7735_VMCTR1); // VCOM
+    _WriteData(lcd, 0x0a);
+    _WriteCMD(lcd, ST7735_MADCTL); // MX, MY, RGB mode
+    _WriteData(lcd, 0xC0);
 
     //------------------------------------ST7735S Gamma Sequence-----------------------------------------//
     //电源参数：定值
-    LCD_Write_COMMAND(ST7735_GMCTRP1);
-    LCD_Write_Data8(0x12);
-    LCD_Write_Data8(0x1C);
-    LCD_Write_Data8(0x10);
-    LCD_Write_Data8(0x18);
-    LCD_Write_Data8(0x33);
-    LCD_Write_Data8(0x2C);
-    LCD_Write_Data8(0x25);
-    LCD_Write_Data8(0x28);
-    LCD_Write_Data8(0x28);
-    LCD_Write_Data8(0x27);
-    LCD_Write_Data8(0x2F);
-    LCD_Write_Data8(0x3C);
-    LCD_Write_Data8(0x00);
-    LCD_Write_Data8(0x03);
-    LCD_Write_Data8(0x03);
-    LCD_Write_Data8(0x10);
-    LCD_Write_COMMAND(ST7735_GMCTRN1);
-    LCD_Write_Data8(0x12);
-    LCD_Write_Data8(0x1C);
-    LCD_Write_Data8(0x10);
-    LCD_Write_Data8(0x18);
-    LCD_Write_Data8(0x2D);
-    LCD_Write_Data8(0x28);
-    LCD_Write_Data8(0x23);
-    LCD_Write_Data8(0x28);
-    LCD_Write_Data8(0x28);
-    LCD_Write_Data8(0x26);
-    LCD_Write_Data8(0x2F);
-    LCD_Write_Data8(0x3B);
-    LCD_Write_Data8(0x00);
-    LCD_Write_Data8(0x03);
-    LCD_Write_Data8(0x03);
-    LCD_Write_Data8(0x10);
+    _WriteCMD(lcd, ST7735_GMCTRP1);
+    _WriteData(lcd, 0x12);
+    _WriteData(lcd, 0x1C);
+    _WriteData(lcd, 0x10);
+    _WriteData(lcd, 0x18);
+    _WriteData(lcd, 0x33);
+    _WriteData(lcd, 0x2C);
+    _WriteData(lcd, 0x25);
+    _WriteData(lcd, 0x28);
+    _WriteData(lcd, 0x28);
+    _WriteData(lcd, 0x27);
+    _WriteData(lcd, 0x2F);
+    _WriteData(lcd, 0x3C);
+    _WriteData(lcd, 0x00);
+    _WriteData(lcd, 0x03);
+    _WriteData(lcd, 0x03);
+    _WriteData(lcd, 0x10);
+    _WriteCMD(lcd, ST7735_GMCTRN1);
+    _WriteData(lcd, 0x12);
+    _WriteData(lcd, 0x1C);
+    _WriteData(lcd, 0x10);
+    _WriteData(lcd, 0x18);
+    _WriteData(lcd, 0x2D);
+    _WriteData(lcd, 0x28);
+    _WriteData(lcd, 0x23);
+    _WriteData(lcd, 0x28);
+    _WriteData(lcd, 0x28);
+    _WriteData(lcd, 0x26);
+    _WriteData(lcd, 0x2F);
+    _WriteData(lcd, 0x3B);
+    _WriteData(lcd, 0x00);
+    _WriteData(lcd, 0x03);
+    _WriteData(lcd, 0x03);
+    _WriteData(lcd, 0x10);
     //------------------------------------End ST7735S Gamma Sequence-----------------------------------------//
-    LCD_Write_COMMAND(ST7735_COLMOD); //16-bit pixel
-    LCD_Write_Data8(0x05);
-    LCD_Write_COMMAND(ST7735_DISPON); //Display on 
-    HAL_Delay(50); 
+    _WriteCMD(lcd, ST7735_COLMOD); // 16-bit pixel
+    _WriteData(lcd, 0x05);
+    _WriteCMD(lcd, ST7735_DISPON); // Display on
 
+    _SetCS(lcd, false);
+    _Delay(50);
 }
 
-//填充整个屏幕为某个颜色
-void LCD_fillScreen(uint16_t color)
+void LCD_Flush(LCD_t *lcd, uint16_t startX, uint16_t startY, uint16_t endX, uint16_t endY, uint8_t *data)
 {
-    // LCD_Zone_Set(0, 0, LCD_W - 1, LCD_H - 1);
-    // // uint8_t temBuf[2];
-    // // temBuf[0] = color >> 8;
-    // // temBuf[1] = color & 0xff;
+    _SetCS(lcd, true);
 
-    // LCD_DC_DATA();
-    // LCD_CS_ENABLE();
-    
-    // for (uint8_t i = 0; i < LCD_W; i++) {
-    //     for (uint8_t j = 0; j < LCD_H; j++) {
-    //         screenBuf[i][j][0] = color >> 8;
-    //         screenBuf[i][j][1] = color & 0xff;
-    //     }
-    // }
-    // HAL_SPI_Transmit_DMA(&hspi2, (uint8_t *)screenBuf, sizeof(screenBuf));
-    // while(hspi2.State != HAL_SPI_STATE_READY);
-
-    // LCD_CS_DISABLE();
+    _SetZone(lcd, startX, startY, endX, endY);
+    _WriteCMD(lcd, ST7735_RAMWR);
+    _WriteDataBuffer(lcd, data, 2 * (endX - startX + 1) * (endY - startY + 1));
 }
 
-//获取为屏幕填充任意颜色的16位（5-6-5）二进制数值
-uint16_t RGB565( uint8_t r, uint8_t g, uint8_t b ){
-    uint16_t sum;
-    uint8_t _r, _g, _b;
-    _r = (uint8_t)(int)((float)r/255.0f * 31.0f);
-    _r &= 0x1f;
-    _g = (uint8_t)(int)((float)g/255.0f * 63.0f);
-    _g &= 0x3f;
-    _b = (uint8_t)(int)((float)b/255.0f * 31.0f);
-    _b &= 0x1f;
-
-    sum = ( _r << 11 ) | ( _g << 5 ) | _b;
-
-    return sum;
-    
-}
-
-//在某个区域内填充颜色
-void LCD_DrawRegion( int xS, int yS, int xE, int yE, uint16_t color){
-    LCD_Zone_Set(xS, yS, xE, yE);
-    for (int i = xS; i <= xE; i++)
-    {
-        for (int j = yS; j <= yE; j++)
-        {
-            LCD_Write_Data16(color);
-        }
-        
-    }
-    
-}
-
-//显示图像
-void LCD_showimage(const unsigned char *p) {
- {
-  	int i; 
-	unsigned char picH,picL;
-	LCD_fillScreen(ST7735_WHITE); //清屏  
-	
-	
-			LCD_Zone_Set(0,0,127,159);		
-		    for(i=0;i<128*160;i++)
-			 {	
-			 	picL=*(p+i*2);	//数据低位在前
-				picH=*(p+i*2+1);				
-				LCD_Write_Data16(picH<<8|picL);  						
-			 }	
-		 }
-	}		
-
-//显示文字
-void LCD_showletter(int xS,int yS,const unsigned char *p){
-    static uint16_t fontColor = ST7735_BLUE;
-    static uint16_t backColor = ST7735_WHITE;
-    LCD_Zone_Set(xS, yS, xS+7, yS+15);
-    for (int j = 0; j < 16; j++)
-    {
-        for (int k = 0; k < 8; k++)
-            {
-                if(*(p+j)&(1<<k)){
-                    LCD_Write_Data16(fontColor);
-                }
-                else{
-                    LCD_Write_Data16(backColor);
-                }
-            }
-            
-        }
- }
-
- void drawNumber_1(int num, int xStart, int yStart)
+void LCD_SPI_TxCpltCallback(LCD_t *lcd)
 {
-	switch(num)
-	{
-		case 0: 
-			LCD_showletter(xStart, yStart, Number_0); 
-			break;
-
-		case 1:  
-			LCD_showletter(xStart, yStart, Number_1); 
-			break;
-		
-		case 2:  
-			LCD_showletter(xStart, yStart, Number_2); 
-			break;
-
-		case 3:  
-			LCD_showletter(xStart, yStart, Number_3); 
-			break;
-
-		case 4:  
-			LCD_showletter(xStart, yStart, Number_4); 
-			break;
-
-		case 5:  
-			LCD_showletter(xStart, yStart, Number_5); 
-			break;
-
-		case 6:  
-			LCD_showletter(xStart, yStart, Number_6); 
-			break;
-
-		case 7:  
-			LCD_showletter(xStart, yStart, Number_7); 
-			break;
-
-		case 8:  
-			LCD_showletter(xStart, yStart, Number_8); 
-			break;
-
-		case 9:  
-			LCD_showletter(xStart, yStart, Number_9); 
-			break;
-
-		default:
-			break;
-	}
-}
-
-//显示一个两位数
-void drawNumber_2(int num, int xStart, int yStart)
-{
-    drawNumber_1((num/10),xStart,yStart);
-    drawNumber_1((num-(num/10)*10),(xStart+8),yStart);
-}
-
-//显示一个三位数
-void drawNumber_3(int num, int xStart, int yStart)
-{
-    drawNumber_1((num/100),xStart,yStart);
-    drawNumber_2((num-(num/100)*100),xStart+8,yStart);
-}
-
-//显示一个四位数
-void drawNumber_4(int num, int xStart, int yStart)
-{
-    drawNumber_1((num/1000),xStart,yStart);
-    drawNumber_3((num-(num/1000)*1000),xStart+8,yStart);
-}
-
-//显示一个五位数
-void drawNumber_5(int num, int xStart, int yStart)
-{
-    drawNumber_1((num/10000),xStart,yStart);
-    drawNumber_4((num-(num/10000)*10000),xStart+8,yStart);
-}
-
-//显示一个六位数
-void drawNumber_6(int num, int xStart, int yStart)
-{
-    drawNumber_1((num/100000),xStart,yStart);
-    drawNumber_5((num-(num/100000)*100000),xStart+8,yStart);
-}
-
-//显示一个小于6位的任意位数数字
-void drawNumber(int num, int xStart, int yStart)
-{
-    if((num/100000) != 0) drawNumber_6(num,xStart,yStart);
-    else if((num/10000) != 0) drawNumber_5(num,xStart,yStart);
-    else if((num/1000) != 0) drawNumber_4(num,xStart,yStart);
-    else if((num/100) != 0) drawNumber_3(num,xStart,yStart);
-    else if((num/10) != 0) drawNumber_2(num,xStart,yStart);
-    else drawNumber_1(num,xStart,yStart);
-}
-
-//测试代码
-void lcd_init()
-{
-	
-	
-	LCD_fillScreen(ST7735_CASET);
-  
-	LCD_showletter(0,0,Letter_A);
-	LCD_showletter(8,0,Letter_X);
-	LCD_showletter(0,16,Letter_A);
-	LCD_showletter(8,16,Letter_Y);
-	LCD_showletter(0,32,Letter_A);
-	LCD_showletter(8,32,Letter_Z);
-	
-	LCD_showletter(0,48,Letter_W);
-	LCD_showletter(8,48,Letter_X);
-	LCD_showletter(0,64,Letter_W);
-	LCD_showletter(8,64,Letter_Y);
-	LCD_showletter(0,80,Letter_W);
-	LCD_showletter(8,80,Letter_Z);
-	
-	LCD_showletter(0,96,Letter_R);
-	LCD_showletter(8,96,Letter_X);
-	LCD_showletter(0,112,Letter_R);
-	LCD_showletter(8,112,Letter_Y);
-	LCD_showletter(0,128,Letter_R);
-	LCD_showletter(8,128,Letter_Z);
-	
-	LCD_showletter(0,144,Letter_T);
+    _SetCS(lcd, false);
 }

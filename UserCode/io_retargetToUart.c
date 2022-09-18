@@ -24,7 +24,7 @@ static UART_HandleTypeDef *stdin_huart  = &huart1;
  * @param huart
  * @return char
  */
-inline char UART_ReadChar(UART_HandleTypeDef *huart)
+char UART_ReadChar(UART_HandleTypeDef *huart)
 {
     while (!__HAL_UART_GET_FLAG(huart, UART_FLAG_RXNE));
     return (huart->Instance->DR & (uint8_t)0x00FF);
