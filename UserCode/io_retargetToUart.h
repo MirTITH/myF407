@@ -16,7 +16,7 @@ extern "C" {
 
 #include "usart.h"
 
-// #define IORETARGET_USE_RTOS              // 是否使用 RTOS
+#define IORETARGET_USE_RTOS              // 是否使用 RTOS
 #define IORETARGET_STDIN_BUFFER_SIZE 128 // stdin 缓冲区大小，设为 0 表示不使用 stdin 缓冲（使用缓冲区还要开启串口接收中断）
 
 #if (defined IORETARGET_STDIN_BUFFER_SIZE) && (IORETARGET_STDIN_BUFFER_SIZE > 0)

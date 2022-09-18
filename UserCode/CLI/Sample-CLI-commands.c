@@ -144,6 +144,13 @@ static const CLI_Command_Definition_t xParameterEcho =
 		prvRunTimeStatsCommand, /* The function to run. */
 		0 /* No parameters are expected. */
 	};
+	static const CLI_Command_Definition_t xTop =
+	{
+		"top", /* The command string to type. */
+		"top: 和 run-time-stats 相同\r\n\r\n",
+		prvRunTimeStatsCommand, /* The function to run. */
+		0 /* No parameters are expected. */
+	};
 #endif /* configGENERATE_RUN_TIME_STATS */
 
 #if( configINCLUDE_QUERY_HEAP_COMMAND == 1 )
@@ -184,6 +191,7 @@ void vRegisterSampleCLICommands( void )
 	#if( configGENERATE_RUN_TIME_STATS == 1 )
 	{
 		FreeRTOS_CLIRegisterCommand( &xRunTimeStats );
+		FreeRTOS_CLIRegisterCommand( &xTop );
 	}
 	#endif
 	
