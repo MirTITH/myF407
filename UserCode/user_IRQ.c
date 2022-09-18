@@ -15,6 +15,7 @@
 #include "st7735s_driver.h"
 #include "lv_port_disp_st7735s.h"
 #include "cmsis_os.h"
+#include "io_retargetToUart.h"
 
 void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
 {
@@ -28,4 +29,9 @@ void HAL_SPI_TxCpltCallback(SPI_HandleTypeDef *hspi)
 void vApplicationTickHook(void)
 {
     lv_tick_inc(1000 / osKernelSysTickFrequency);
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    IORetarget_Uart_RxCpltCallback(huart);
 }

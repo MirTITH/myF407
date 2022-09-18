@@ -2,16 +2,14 @@
  * @file io_retargetToUart.c
  * @author X. Y.
  * @brief io 重定向，支持输入和输出（注意不能在中断中使用）
- * @version 3.4
+ * @version 3.5
  * @date 2022-9-18
  *
  * @copyright Copyright (c) 2022
  *
  */
-
-#include "usart.h"
-
-#define config_USE_RTOS // 是否使用 RTOS
+#include "io_retargetToUart.h"
+#include "string.h"
 
 // 串口号配置
 // 注：仅 GCC 编译器支持 stderr 和 stdout 指定不同串口，ARMCC 编译器的 stderr 和 stdout 都使用 stdout_huart 输出。
@@ -19,14 +17,56 @@ static UART_HandleTypeDef *stdout_huart = &huart1;
 static UART_HandleTypeDef *stderr_huart = &huart1;
 static UART_HandleTypeDef *stdin_huart  = &huart1;
 
-#ifdef config_USE_RTOS
+#ifdef IORETARGET_USE_RTOS
 #include "cmsis_os.h"
 #endif
 
-static void UART_WriteStr(UART_HandleTypeDef *huart, const uint8_t *str, uint16_t size)
+#if (defined IORETARGET_STDIN_BUFFER_SIZE) && (IORETARGET_STDIN_BUFFER_SIZE > 0)
+static IO_BufferQueue_t stdinBufferQueue = {
+    .start      = 0,
+    .end        = 0,
+    .total_size = IORETARGET_STDIN_BUFFER_SIZE};
+
+void IORetarget_Uart_Receive_IT()
+{
+    HAL_UART_Receive_IT(stdin_huart, (uint8_t *)&stdinBufferQueue.buffer[stdinBufferQueue.end], 1);
+}
+
+void IORetarget_Uart_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    if (huart == stdin_huart) {
+        stdinBufferQueue.end++;
+        if (stdinBufferQueue.end >= stdinBufferQueue.total_size) stdinBufferQueue.end = 0;
+        HAL_UART_Receive_IT(stdin_huart, (uint8_t *)&stdinBufferQueue.buffer[stdinBufferQueue.end], 1);
+    }
+}
+
+static int IORetarget_ReadStr(IO_BufferQueue_t *bufferQueue, char *pBuffer, int size)
+{
+    while (bufferQueue->start == bufferQueue->end) {
+#ifdef IORETARGET_USE_RTOS
+        osThreadYield();
+#endif
+    }
+
+    for (int i = 0; i < size; i++) {
+        if (bufferQueue->start != bufferQueue->end) {
+            *pBuffer = bufferQueue->buffer[bufferQueue->start++];
+            pBuffer++;
+            if (bufferQueue->start >= stdinBufferQueue.total_size) stdinBufferQueue.start = 0;
+        } else {
+            return i;
+        }
+    }
+    return size;
+}
+
+#endif
+
+static void IORetarget_WriteStr(UART_HandleTypeDef *huart, const uint8_t *str, uint16_t size)
 {
     while (HAL_UART_Transmit(huart, str, size, HAL_MAX_DELAY) == HAL_BUSY) {
-#ifdef config_USE_RTOS
+#ifdef IORETARGET_USE_RTOS
         osThreadYield();
 #endif
     }
@@ -38,10 +78,10 @@ static void UART_WriteStr(UART_HandleTypeDef *huart, const uint8_t *str, uint16_
  * @param huart
  * @return char
  */
-static char UART_ReadChar(UART_HandleTypeDef *huart)
+char IORetarget_ReadChar(UART_HandleTypeDef *huart)
 {
     while (!__HAL_UART_GET_FLAG(huart, UART_FLAG_RXNE)) {
-#ifdef config_USE_RTOS
+#ifdef IORETARGET_USE_RTOS
         osThreadYield();
 #endif
     }
@@ -68,10 +108,10 @@ __attribute__((used)) int _write(int fd, char *pBuffer, int size)
 {
     switch (fd) {
         case STDOUT_FILENO: // 标准输出流
-            UART_WriteStr(stdout_huart, (uint8_t *)pBuffer, size);
+            IORetarget_WriteStr(stdout_huart, (uint8_t *)pBuffer, size);
             break;
         case STDERR_FILENO: // 标准错误流
-            UART_WriteStr(stderr_huart, (uint8_t *)pBuffer, size);
+            IORetarget_WriteStr(stderr_huart, (uint8_t *)pBuffer, size);
             break;
         default:
             // EBADF, which means the file descriptor is invalid or the file isn't opened for writing;
@@ -97,7 +137,12 @@ __attribute__((used)) int _read(int fd, char *pBuffer, int size)
 
     switch (fd) {
         case STDIN_FILENO:
-            *pBuffer = UART_ReadChar(stdin_huart);
+#if (defined IORETARGET_STDIN_BUFFER_SIZE) && (IORETARGET_STDIN_BUFFER_SIZE > 0)
+            return IORetarget_ReadStr(&stdinBufferQueue, pBuffer, size);
+#else
+            *pBuffer = IORetarget_ReadChar(stdin_huart);
+            return 1;
+#endif
             break;
 
         default:
@@ -106,7 +151,6 @@ __attribute__((used)) int _read(int fd, char *pBuffer, int size)
             return -1;
             break;
     }
-    return 1;
 }
 
 #else
@@ -128,14 +172,20 @@ __attribute__((used)) int _read(int fd, char *pBuffer, int size)
  */
 int fputc(int ch, FILE *stream)
 {
-    UART_WriteStr(stdout_huart, (uint8_t *)&ch, 1);
+    IORetarget_WriteStr(stdout_huart, (uint8_t *)&ch, 1);
     return ch;
 }
 
 int fgetc(FILE *stream)
 {
     (void)stream;
-    return UART_ReadChar(stdin_huart);
+    char ch;
+#if (defined IORETARGET_STDIN_BUFFER_SIZE) && (IORETARGET_STDIN_BUFFER_SIZE > 0)
+    IORetarget_ReadStr(&stdinBufferQueue, &ch, 1);
+#else
+    ch = IORetarget_ReadChar(stdin_huart);
+#endif
+    return (int)ch;
 }
 
 // ARMCC 默认启用半主机模式，重定向 printf 后需要关闭，防止卡死

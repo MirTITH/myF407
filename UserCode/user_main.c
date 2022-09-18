@@ -5,10 +5,13 @@
 #include "lvgl_task.h"
 #include "lv_demos.h"
 #include "lvgl_ui.h"
+#include "io_retargetToUart.h"
 
 void StartDefaultTask(void const *argument)
 {
     (void)argument;
+
+    IORetarget_Uart_Receive_IT();
 
     CLI_Start();
 
