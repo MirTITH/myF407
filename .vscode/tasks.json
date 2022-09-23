@@ -1,39 +1,35 @@
 {
-    "version": "2.0.0",
-    "tasks": [
-        {
-            "label": "build",
-            "type": "shell",
-            "command": "${command:eide.project.build}",
-            "group": "build",
-            "problemMatcher": "$gcc"
-        },
-        {
-            "label": "flash",
-            "type": "shell",
-            "command": "${command:eide.project.uploadToDevice}",
-            "group": "build",
-            "problemMatcher": []
-        },
-        {
-            "label": "build and flash",
-            "type": "shell",
-            "command": "${command:eide.project.buildAndFlash}",
-            "group": "build"
-        },
-        {
-            "label": "rebuild",
-            "type": "shell",
-            "command": "${command:eide.project.rebuild}",
-            "group": "build",
-            "problemMatcher": "$gcc"
-        },
-        {
-            "label": "clean",
-            "type": "shell",
-            "command": "${command:eide.project.clean}",
-            "group": "build",
-            "problemMatcher": []
-        }
-    ]
+	// See https://go.microsoft.com/fwlink/?LinkId=733558
+	// for the documentation about the tasks.json format
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "shell",
+			"label": "Build & Flash",
+			"group": "build",
+			"dependsOn": "CMake: build",
+			"detail": "Build and flash to the target",
+			"command": "openocd",
+			"args": [
+				"-f",
+				// "interface/jlink-sw.cfg", // 使用 openocd 自带的配置文件
+				"jlink-sw.cfg", // 使用工程目录下的配置文件
+				"-f",
+				"target/stm32l4x.cfg", // 烧录的 MCU 配置
+				"-c",
+				"program \"build/stm32_cmake.elf\" verify reset exit"
+			]
+		},
+		{
+			"type": "cmake",
+			"label": "CMake: build",
+			"command": "build",
+			"targets": [
+				"all"
+			],
+			"group": "build",
+			"problemMatcher": [],
+			"detail": "CMake template build task"
+		}
+	]
 }
